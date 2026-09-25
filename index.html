@@ -4,718 +4,399 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FPA Load Board - Training Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          colors: {
+            dat: {
+              blue: '#003366',
+              light: '#0066cc',
+              accent: '#ff6600'
+            },
+            credit: {
+              excellent: '#22c55e',
+              good: '#84cc16',
+              fair: '#eab308',
+              poor: '#f97316',
+              bad: '#ef4444'
+            }
+          }
+        }
+      }
+    }
+  </script>
   <style>
-    .equipment-DV { background-color: #f3f4f6; color: #1f2937; }
-    .equipment-RF { background-color: #dbeafe; color: #1e40af; }
-    .equipment-FB { background-color: #ffedd5; color: #c2410c; }
-    .equipment-SD { background-color: #fef3c7; color: #a16207; }
-    .load-row { cursor: pointer; transition: background-color 0.15s; }
-    .load-row:hover { background-color: #eff6ff; }
-    .load-row.selected { background-color: #dbeafe; border-left: 4px solid #2563eb; }
-    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; align-items: center; justify-content: center; }
-    .modal.active { display: flex; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    .load-row { cursor: pointer; transition: all 0.15s ease; border-left: 3px solid transparent; }
+    .load-row:hover { background-color: #eff6ff; border-left-color: #3b82f6; }
+    .load-row.selected { background-color: #dbeafe; border-left-color: #2563eb; }
+    .load-row.booked { opacity: 0.5; background-color: #f0fdf4; border-left-color: #22c55e; }
+    
+    .eq-DV { background: #e0e7ff; color: #3730a3; }
+    .eq-RF { background: #cffafe; color: #0e7490; }
+    .eq-FB { background: #fef3c7; color: #92400e; }
+    .eq-SD { background: #ffedd5; color: #c2410c; }
+    .eq-PO { background: #f3e8ff; color: #7c3aed; }
+    .eq-HS { background: #fce7f3; color: #be185d; }
+    .eq-LTL { background: #dcfce7; color: #166534; }
+    .eq-OD { background: #fee2e2; color: #991b1b; }
+    
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; padding: 1rem; }
+    .modal-overlay.active { display: flex; }
+    
+    @keyframes pulse-new { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .new-load { animation: pulse-new 2s ease-in-out 3; }
+    
+    .credit-bar { height: 6px; border-radius: 3px; background: #e5e7eb; overflow: hidden; }
+    .credit-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+    
+    @media (max-width: 768px) {
+      .hide-mobile { display: none; }
+      .load-table th, .load-table td { padding: 0.5rem 0.25rem; font-size: 0.75rem; }
+    }
+    
+    .map-container { background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); position: relative; overflow: hidden; }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
-  <!-- Header -->
-  <header class="bg-[#003366] text-white shadow-lg">
-    <div class="max-w-7xl mx-auto px-4 py-3">
-      <div class="flex items-center justify-between flex-wrap gap-2">
-        <div class="flex items-center space-x-4">
-          <h1 class="text-xl md:text-2xl font-bold">FPA Load Board</h1>
-          <span class="bg-yellow-500 text-black px-2 py-1 rounded text-xs font-bold">TRAINING</span>
-        </div>
-        <div class="flex items-center space-x-2">
-          <button onclick="openModal('truckModal')" class="bg-white/10 hover:bg-white/20 px-3 py-2 rounded text-sm">🚚 Truck</button>
-          <button onclick="openModal('bookingsModal')" class="bg-white/10 hover:bg-white/20 px-3 py-2 rounded text-sm">📋 <span id="bookingCount">0</span></button>
-          <button onclick="openModal('statsModal')" class="bg-white/10 hover:bg-white/20 px-3 py-2 rounded text-sm">📊</button>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <div class="max-w-7xl mx-auto px-4 py-4">
-    <!-- Filters (collapsible on mobile) -->
-    <div class="bg-white rounded-lg shadow p-4 mb-4">
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="font-bold">Filters</h2>
-        <button onclick="toggleFilters()" class="md:hidden text-blue-600 text-sm">Toggle</button>
-      </div>
-      <div id="filtersContent" class="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Origin</label>
-          <input type="text" id="originFilter" placeholder="City, ST" class="w-full border rounded px-2 py-1 text-sm" onkeyup="filterLoads()">
-        </div>
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Destination</label>
-          <input type="text" id="destFilter" placeholder="City, ST" class="w-full border rounded px-2 py-1 text-sm" onkeyup="filterLoads()">
-        </div>
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Equipment</label>
-          <select id="equipFilter" class="w-full border rounded px-2 py-1 text-sm" onchange="filterLoads()">
-            <option value="">All</option>
-            <option value="DV">Dry Van</option>
-            <option value="RF">Reefer</option>
-            <option value="FB">Flatbed</option>
-            <option value="SD">Step Deck</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Min $/mi</label>
-          <input type="number" id="minRPM" step="0.1" placeholder="2.50" class="w-full border rounded px-2 py-1 text-sm" onkeyup="filterLoads()">
-        </div>
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Max DH</label>
-          <input type="number" id="maxDH" placeholder="150" class="w-full border rounded px-2 py-1 text-sm" onkeyup="filterLoads()">
-        </div>
-        <div class="flex items-end">
-          <button onclick="clearFilters()" class="w-full bg-gray-200 hover:bg-gray-300 py-1 rounded text-sm">Clear</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Results -->
-    <div class="bg-white rounded-lg shadow p-3 mb-2">
-      <span class="text-gray-600"><strong id="loadCount">0</strong> loads found</span>
-      <span class="text-sm text-gray-400 ml-2">📍 From: <span id="currentLocation">Chicago, IL</span></span>
-    </div>
-
-    <!-- Load Table -->
-    <div class="bg-white rounded-lg shadow overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50 border-b">
-          <tr>
-            <th class="text-left px-3 py-2 font-medium text-gray-600">Origin</th>
-            <th class="text-left px-3 py-2 font-medium text-gray-600">Destination</th>
-            <th class="text-center px-2 py-2 font-medium text-gray-600">Eq</th>
-            <th class="text-right px-2 py-2 font-medium text-gray-600">Mi</th>
-            <th class="text-right px-2 py-2 font-medium text-gray-600">DH</th>
-            <th class="text-right px-3 py-2 font-medium text-gray-600">Rate</th>
-            <th class="text-right px-2 py-2 font-medium text-gray-600">$/mi</th>
-            <th class="text-center px-2 py-2 font-medium text-gray-600">Credit</th>
-          </tr>
-        </thead>
-        <tbody id="loadsTable"></tbody>
-      </table>
-      <div id="noLoads" class="p-8 text-center text-gray-500 hidden">No loads match your filters.</div>
-    </div>
-  </div>
-
-  <!-- Load Details Modal -->
-  <div id="loadModal" class="modal">
-    <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-      <div class="bg-[#003366] text-white p-4 flex justify-between items-center">
-        <h2 class="font-bold">Load Details</h2>
-        <button onclick="closeModal('loadModal')" class="text-2xl">&times;</button>
-      </div>
-      <div id="loadDetails" class="p-4"></div>
-    </div>
-  </div>
-
-  <!-- Truck Profile Modal -->
-  <div id="truckModal" class="modal">
-    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-      <div class="bg-[#003366] text-white p-4 flex justify-between items-center">
-        <h2 class="font-bold">🚚 Truck Profile</h2>
-        <button onclick="closeModal('truckModal')" class="text-2xl">&times;</button>
-      </div>
-      <div class="p-4">
-        <div class="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label class="block text-sm font-medium mb-1">Truck Name</label>
-            <input type="text" id="truckName" value="My Truck" class="w-full border rounded px-3 py-2">
+  
+  <!-- Top Navigation -->
+  <nav class="bg-dat-blue text-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-[1920px] mx-auto">
+      <div class="flex items-center justify-between px-4 py-2">
+        <div class="flex items-center gap-6">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+              <span class="text-dat-blue font-bold text-xl">FPA</span>
+            </div>
+            <div>
+              <div class="font-bold text-lg leading-tight">Load Board</div>
+              <div class="text-xs text-blue-300">Training Simulator</div>
+            </div>
           </div>
-          <div>
-            <label class="block text-sm font-medium mb-1">MC Number</label>
-            <input type="text" id="truckMC" value="MC-123456" class="w-full border rounded px-3 py-2">
+          
+          <div class="hidden md:flex items-center gap-1">
+            <button onclick="setView('search')" id="nav-search" class="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition text-sm font-medium">🔍 Search Loads</button>
+            <button onclick="setView('postTruck')" id="nav-postTruck" class="px-4 py-2 rounded-lg hover:bg-white/10 transition text-sm">🚚 Post Truck</button>
+            <button onclick="setView('market')" id="nav-market" class="px-4 py-2 rounded-lg hover:bg-white/10 transition text-sm">📊 Market Data</button>
           </div>
-          <div>
-            <label class="block text-sm font-medium mb-1">Equipment</label>
-            <select id="truckEquip" class="w-full border rounded px-3 py-2">
-              <option value="DV">Dry Van</option>
-              <option value="RF">Reefer</option>
-              <option value="FB">Flatbed</option>
-              <option value="SD">Step Deck</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-1">Location</label>
-            <select id="truckLocation" class="w-full border rounded px-3 py-2">
+        </div>
+        
+        <div class="flex items-center gap-3">
+          <div class="hidden sm:flex items-center gap-2 bg-white/10 rounded-lg px-3 py-1.5">
+            <span class="text-xs text-blue-200">Location:</span>
+            <select id="currentLocationNav" onchange="updateCurrentLocation()" class="bg-transparent text-white text-sm font-medium focus:outline-none cursor-pointer">
               <option value="Chicago, IL">Chicago, IL</option>
               <option value="Dallas, TX">Dallas, TX</option>
               <option value="Atlanta, GA">Atlanta, GA</option>
               <option value="Los Angeles, CA">Los Angeles, CA</option>
               <option value="Denver, CO">Denver, CO</option>
+              <option value="Memphis, TN">Memphis, TN</option>
+              <option value="Indianapolis, IN">Indianapolis, IN</option>
+            </select>
+          </div>
+          
+          <button onclick="openModal('bookingsModal')" class="relative px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition">
+            <span class="text-sm">📋 My Loads</span>
+            <span id="bookingBadge" class="absolute -top-1 -right-1 bg-dat-accent text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold hidden">0</span>
+          </button>
+          
+          <button onclick="openModal('statsModal')" class="px-3 py-2 rounded-lg bg-dat-accent hover:bg-orange-600 transition text-sm font-medium">📈 Stats</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-[1920px] mx-auto p-4">
+    
+    <!-- Search Panel -->
+    <div id="searchPanel" class="bg-white rounded-xl shadow-sm mb-4">
+      <div class="p-4 border-b">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-gray-800">🔍 Load Search</h2>
+          <div class="flex items-center gap-2">
+            <button onclick="saveSearch()" class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+              Save Search
+            </button>
+            <button onclick="clearAllFilters()" class="text-sm text-gray-500 hover:text-gray-700">Clear All</button>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          <div class="col-span-2 lg:col-span-1">
+            <label class="block text-xs font-medium text-gray-500 mb-1">ORIGIN</label>
+            <input type="text" id="originFilter" placeholder="City, ST or Zone" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" onkeyup="filterLoads()">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">DH-O (mi)</label>
+            <input type="number" id="dhOrigin" placeholder="150" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" onkeyup="filterLoads()">
+          </div>
+          <div class="col-span-2 lg:col-span-1">
+            <label class="block text-xs font-medium text-gray-500 mb-1">DESTINATION</label>
+            <input type="text" id="destFilter" placeholder="City, ST or Zone" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" onkeyup="filterLoads()">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">DH-D (mi)</label>
+            <input type="number" id="dhDest" placeholder="100" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" onkeyup="filterLoads()">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">EQUIPMENT</label>
+            <select id="equipFilter" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" onchange="filterLoads()">
+              <option value="">All Types</option>
+              <option value="DV">Dry Van</option>
+              <option value="RF">Reefer</option>
+              <option value="FB">Flatbed</option>
+              <option value="SD">Step Deck</option>
+              <option value="PO">Power Only</option>
+              <option value="HS">Hotshot</option>
+              <option value="LTL">LTL</option>
+              <option value="OD">Oversize</option>
             </select>
           </div>
           <div>
-            <label class="block text-sm font-medium mb-1">Min $/mile</label>
-            <input type="number" id="truckMinRPM" value="2.50" step="0.1" class="w-full border rounded px-3 py-2">
+            <label class="block text-xs font-medium text-gray-500 mb-1">LOAD TYPE</label>
+            <select id="loadTypeFilter" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" onchange="filterLoads()">
+              <option value="">All</option>
+              <option value="full">Full</option>
+              <option value="partial">Partial/LTL</option>
+            </select>
           </div>
           <div>
-            <label class="block text-sm font-medium mb-1">Max Deadhead</label>
-            <input type="number" id="truckMaxDH" value="150" class="w-full border rounded px-3 py-2">
+            <label class="block text-xs font-medium text-gray-500 mb-1">PICKUP</label>
+            <input type="date" id="pickupDate" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" onchange="filterLoads()">
           </div>
         </div>
-        <button onclick="saveTruckProfile()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded font-bold">Save Profile</button>
+        
+        <div class="mt-3 pt-3 border-t flex flex-wrap items-center gap-4">
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-medium text-gray-500">Min $/mi:</label>
+            <input type="number" id="minRPM" step="0.10" placeholder="2.50" class="w-20 border border-gray-300 rounded px-2 py-1 text-sm" onkeyup="filterLoads()">
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-medium text-gray-500">Min Rate:</label>
+            <input type="number" id="minRate" step="100" placeholder="$1000" class="w-24 border border-gray-300 rounded px-2 py-1 text-sm" onkeyup="filterLoads()">
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-medium text-gray-500">Credit Score:</label>
+            <select id="minCredit" class="border border-gray-300 rounded px-2 py-1 text-sm" onchange="filterLoads()">
+              <option value="0">Any</option>
+              <option value="90">90+ (Excellent)</option>
+              <option value="80">80+ (Good)</option>
+              <option value="70">70+ (Fair)</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-medium text-gray-500">Days to Pay:</label>
+            <select id="maxDays" class="border border-gray-300 rounded px-2 py-1 text-sm" onchange="filterLoads()">
+              <option value="999">Any</option>
+              <option value="15">≤15 days</option>
+              <option value="21">≤21 days</option>
+              <option value="30">≤30 days</option>
+            </select>
+          </div>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="teamFilter" class="w-4 h-4 text-blue-600 rounded" onchange="filterLoads()">
+            <span class="text-sm text-gray-600">Team Drivers</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="hazmatFilter" class="w-4 h-4 text-blue-600 rounded" onchange="filterLoads()">
+            <span class="text-sm text-gray-600">HAZMAT</span>
+          </label>
+          <button onclick="filterLoads()" class="ml-auto px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition">Search</button>
+        </div>
       </div>
     </div>
-  </div>
+    
+    <!-- Results Header -->
+    <div class="flex items-center justify-between mb-3 px-1">
+      <div class="flex items-center gap-4">
+        <span class="text-gray-600"><strong id="loadCount" class="text-gray-900">0</strong> loads found</span>
+        <span class="text-sm text-gray-400">|</span>
+        <span class="text-sm text-gray-500">📍 From: <strong id="currentLocationLabel">Chicago, IL</strong></span>
+        <button onclick="refreshLoads()" class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-sm text-gray-500">Sort by:</label>
+        <select id="sortBy" class="border border-gray-300 rounded px-2 py-1 text-sm" onchange="sortLoads()">
+          <option value="rpm-desc">$/Mile (High→Low)</option>
+          <option value="rpm-asc">$/Mile (Low→High)</option>
+          <option value="rate-desc">Rate (High→Low)</option>
+          <option value="rate-asc">Rate (Low→High)</option>
+          <option value="miles-desc">Miles (Long→Short)</option>
+          <option value="miles-asc">Miles (Short→Long)</option>
+          <option value="dh-asc">Deadhead (Near→Far)</option>
+          <option value="pickup-asc">Pickup (Earliest)</option>
+          <option value="age-asc">Posted (Newest)</option>
+        </select>
+      </div>
+    </div>
+    
+    <!-- Load Table -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm load-table">
+          <thead class="bg-gray-50 border-b text-left">
+            <tr>
+              <th class="px-3 py-3 font-semibold text-gray-600 w-8"></th>
+              <th class="px-3 py-3 font-semibold text-gray-600">Age</th>
+              <th class="px-3 py-3 font-semibold text-gray-600">Origin</th>
+              <th class="px-3 py-3 font-semibold text-gray-600">Destination</th>
+              <th class="px-3 py-3 font-semibold text-gray-600 text-center">Equip</th>
+              <th class="px-3 py-3 font-semibold text-gray-600 text-right hide-mobile">Miles</th>
+              <th class="px-3 py-3 font-semibold text-gray-600 text-right">DH</th>
+              <th class="px-3 py-3 font-semibold text-gray-600 text-right">Rate</th>
+              <th class="px-3 py-3 font-semibold text-gray-600 text-right">$/mi</th>
+              <th class="px-3 py-3 font-semibold text-gray-600 hide-mobile">Pickup</th>
+              <th class="px-3 py-3 font-semibold text-gray-600">Broker</th>
+              <th class="px-3 py-3 font-semibold text-gray-600 text-center hide-mobile">Credit</th>
+              <th class="px-3 py-3 font-semibold text-gray-600 text-center hide-mobile">Details</th>
+            </tr>
+          </thead>
+          <tbody id="loadsTable"></tbody>
+        </table>
+      </div>
+      <div id="noLoads" class="p-12 text-center text-gray-500 hidden">
+        <div class="text-4xl mb-3">🔍</div>
+        <div class="font-medium text-gray-700">No loads match your search criteria</div>
+        <div class="text-sm mt-1">Try adjusting your filters or expanding your search radius</div>
+      </div>
+      <div id="pagination" class="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
+        <div class="text-sm text-gray-500">Showing <span id="showingStart">1</span>-<span id="showingEnd">50</span> of <span id="totalLoads">0</span></div>
+        <div class="flex items-center gap-2">
+          <button onclick="prevPage()" class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50" id="prevBtn">← Prev</button>
+          <span class="text-sm text-gray-600">Page <span id="currentPage">1</span></span>
+          <button onclick="nextPage()" class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50" id="nextBtn">Next →</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Market Data Panel -->
+    <div id="marketPanel" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <div class="bg-white rounded-xl shadow-sm p-4">
+          <h3 class="font-bold text-gray-800 mb-4">📈 National Rate Trends</h3>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div><div class="font-medium">Dry Van</div><div class="text-xs text-gray-500">National Avg</div></div>
+              <div class="text-right"><div class="font-bold text-lg">$2.48</div><div class="text-xs text-green-600">+$0.05 ↑</div></div>
+            </div>
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div><div class="font-medium">Reefer</div><div class="text-xs text-gray-500">National Avg</div></div>
+              <div class="text-right"><div class="font-bold text-lg">$2.85</div><div class="text-xs text-green-600">+$0.08 ↑</div></div>
+            </div>
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div><div class="font-medium">Flatbed</div><div class="text-xs text-gray-500">National Avg</div></div>
+              <div class="text-right"><div class="font-bold text-lg">$2.72</div><div class="text-xs text-red-600">-$0.03 ↓</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-4">
+          <h3 class="font-bold text-gray-800 mb-4">🔥 Hot Markets</h3>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between py-2 border-b"><span class="font-medium">Los Angeles, CA</span><span class="text-sm text-green-600 font-medium">High Outbound</span></div>
+            <div class="flex items-center justify-between py-2 border-b"><span class="font-medium">Chicago, IL</span><span class="text-sm text-green-600 font-medium">High Outbound</span></div>
+            <div class="flex items-center justify-between py-2 border-b"><span class="font-medium">Atlanta, GA</span><span class="text-sm text-yellow-600 font-medium">Balanced</span></div>
+            <div class="flex items-center justify-between py-2 border-b"><span class="font-medium">Dallas, TX</span><span class="text-sm text-yellow-600 font-medium">Balanced</span></div>
+            <div class="flex items-center justify-between py-2"><span class="font-medium">Miami, FL</span><span class="text-sm text-red-600 font-medium">Low Outbound</span></div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-4">
+          <h3 class="font-bold text-gray-800 mb-4">⛽ Diesel Prices</h3>
+          <div class="text-center mb-4"><div class="text-4xl font-bold text-gray-900">$3.89</div><div class="text-sm text-gray-500">National Average</div></div>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-gray-600">California</span><span class="font-medium text-red-600">$5.12</span></div>
+            <div class="flex justify-between"><span class="text-gray-600">Texas</span><span class="font-medium text-green-600">$3.45</span></div>
+            <div class="flex justify-between"><span class="text-gray-600">Florida</span><span class="font-medium">$3.78</span></div>
+            <div class="flex justify-between"><span class="text-gray-600">Illinois</span><span class="font-medium">$3.95</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Post Truck Panel -->
+    <div id="postTruckPanel" class="hidden">
+      <div class="bg-white rounded-xl shadow-sm p-6 max-w-2xl">
+        <h2 class="text-xl font-bold text-gray-800 mb-6">🚚 Post Your Truck</h2>
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Current Location</label><input type="text" id="truckOrigin" placeholder="City, ST" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Preferred Destination</label><input type="text" id="truckDest" placeholder="City, ST or Anywhere" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Available Date</label><input type="date" id="truckDate" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Equipment Type</label><select id="truckEquip" class="w-full border border-gray-300 rounded-lg px-3 py-2"><option value="DV">Dry Van</option><option value="RF">Reefer</option><option value="FB">Flatbed</option><option value="SD">Step Deck</option></select></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Trailer Length (ft)</label><input type="number" id="truckLength" value="53" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+          <div><label class="block text-sm font-medium text-gray-700 mb-1">Max Weight (lbs)</label><input type="number" id="truckWeight" value="45000" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+          <div class="col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label><input type="tel" id="truckPhone" placeholder="(555) 123-4567" class="w-full border border-gray-300 rounded-lg px-3 py-2"></div>
+          <div class="col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1">Comments (optional)</label><textarea id="truckComments" placeholder="Team drivers available, HAZMAT endorsed, etc." class="w-full border border-gray-300 rounded-lg px-3 py-2 h-20"></textarea></div>
+        </div>
+        <button onclick="postTruck()" class="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-lg transition">📤 Post Truck</button>
+      </div>
+    </div>
+  </main>
 
-  <!-- Bookings Modal -->
-  <div id="bookingsModal" class="modal">
-    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-      <div class="bg-[#003366] text-white p-4 flex justify-between items-center">
-        <h2 class="font-bold">📋 My Bookings</h2>
-        <button onclick="closeModal('bookingsModal')" class="text-2xl">&times;</button>
-      </div>
-      <div class="p-4">
-        <div id="bookingsSummary" class="grid grid-cols-3 gap-4 mb-4"></div>
-        <div id="bookingsList"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Stats Modal -->
-  <div id="statsModal" class="modal">
-    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-      <div class="bg-[#003366] text-white p-4 flex justify-between items-center">
-        <h2 class="font-bold">📊 Statistics</h2>
-        <button onclick="closeModal('statsModal')" class="text-2xl">&times;</button>
-      </div>
-      <div id="statsContent" class="p-4"></div>
-    </div>
-  </div>
-
-  <!-- Booking Flow Modal -->
-  <div id="bookingFlowModal" class="modal">
-    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-      <div class="bg-[#003366] text-white p-4 flex justify-between items-center">
-        <h2 class="font-bold">📞 Book Load</h2>
-        <button onclick="closeModal('bookingFlowModal')" class="text-2xl">&times;</button>
-      </div>
-      <div id="bookingFlowContent" class="p-4"></div>
-    </div>
-  </div>
+  <!-- Modals -->
+  <div id="loadModal" class="modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"><div class="bg-dat-blue text-white p-4 flex justify-between items-center sticky top-0"><div><h2 class="font-bold text-lg">Load Details</h2><div id="loadRef" class="text-sm text-blue-200"></div></div><button onclick="closeModal('loadModal')" class="text-2xl hover:bg-white/10 w-10 h-10 rounded-lg transition">&times;</button></div><div id="loadDetails" class="p-4"></div></div></div>
+  <div id="brokerModal" class="modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"><div class="bg-dat-blue text-white p-4 flex justify-between items-center"><h2 class="font-bold text-lg">🏢 Broker Check</h2><button onclick="closeModal('brokerModal')" class="text-2xl hover:bg-white/10 w-10 h-10 rounded-lg transition">&times;</button></div><div id="brokerDetails" class="p-4"></div></div></div>
+  <div id="bookingModal" class="modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"><div class="bg-green-600 text-white p-4 flex justify-between items-center sticky top-0"><h2 class="font-bold text-lg">📞 Book This Load</h2><button onclick="closeModal('bookingModal')" class="text-2xl hover:bg-white/10 w-10 h-10 rounded-lg transition">&times;</button></div><div id="bookingContent" class="p-4"></div></div></div>
+  <div id="bookingsModal" class="modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"><div class="bg-dat-blue text-white p-4 flex justify-between items-center sticky top-0"><h2 class="font-bold text-lg">📋 My Booked Loads</h2><button onclick="closeModal('bookingsModal')" class="text-2xl hover:bg-white/10 w-10 h-10 rounded-lg transition">&times;</button></div><div id="bookingsContent" class="p-4"></div></div></div>
+  <div id="statsModal" class="modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"><div class="bg-dat-accent text-white p-4 flex justify-between items-center sticky top-0"><h2 class="font-bold text-lg">📊 Performance Statistics</h2><button onclick="closeModal('statsModal')" class="text-2xl hover:bg-white/10 w-10 h-10 rounded-lg transition">&times;</button></div><div id="statsContent" class="p-4"></div></div></div>
+  <div id="rateConModal" class="modal-overlay"><div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"><div class="bg-green-700 text-white p-4 flex justify-between items-center sticky top-0"><h2 class="font-bold text-lg">✅ Rate Confirmation</h2><button onclick="closeModal('rateConModal')" class="text-2xl hover:bg-white/10 w-10 h-10 rounded-lg transition">&times;</button></div><div id="rateConContent" class="p-4"></div></div></div>
 
 <script>
-// Data
-const cities = [
-  {name: 'Chicago', state: 'IL', lat: 41.8781, lng: -87.6298},
-  {name: 'Dallas', state: 'TX', lat: 32.7767, lng: -96.7970},
-  {name: 'Atlanta', state: 'GA', lat: 33.7490, lng: -84.3880},
-  {name: 'Los Angeles', state: 'CA', lat: 34.0522, lng: -118.2437},
-  {name: 'Denver', state: 'CO', lat: 39.7392, lng: -104.9903},
-  {name: 'Houston', state: 'TX', lat: 29.7604, lng: -95.3698},
-  {name: 'Phoenix', state: 'AZ', lat: 33.4484, lng: -112.0740},
-  {name: 'Miami', state: 'FL', lat: 25.7617, lng: -80.1918},
-  {name: 'Seattle', state: 'WA', lat: 47.6062, lng: -122.3321},
-  {name: 'Detroit', state: 'MI', lat: 42.3314, lng: -83.0458},
-  {name: 'Philadelphia', state: 'PA', lat: 39.9526, lng: -75.1652},
-  {name: 'Nashville', state: 'TN', lat: 36.1627, lng: -86.7816},
-  {name: 'Charlotte', state: 'NC', lat: 35.2271, lng: -80.8431},
-  {name: 'Indianapolis', state: 'IN', lat: 39.7684, lng: -86.1581},
-  {name: 'Columbus', state: 'OH', lat: 39.9612, lng: -82.9988},
-  {name: 'Memphis', state: 'TN', lat: 35.1495, lng: -90.0490},
-  {name: 'Kansas City', state: 'MO', lat: 39.0997, lng: -94.5786},
-  {name: 'Jacksonville', state: 'FL', lat: 30.3322, lng: -81.6557},
-  {name: 'San Antonio', state: 'TX', lat: 29.4241, lng: -98.4936},
-  {name: 'Portland', state: 'OR', lat: 45.5152, lng: -122.6784},
-];
-
-const brokers = [
-  {id: 'b1', name: 'CH Robinson', mc: 'MC-128732', credit: 98, days: 30, phone: '(800) 323-7587'},
-  {id: 'b2', name: 'TQL', mc: 'MC-354840', credit: 95, days: 28, phone: '(800) 580-3101'},
-  {id: 'b3', name: 'Coyote Logistics', mc: 'MC-551052', credit: 96, days: 21, phone: '(877) 626-9683'},
-  {id: 'b4', name: 'Landstar', mc: 'MC-143034', credit: 99, days: 14, phone: '(877) 696-4507'},
-  {id: 'b5', name: 'Echo Global', mc: 'MC-537809', credit: 92, days: 35, phone: '(800) 354-7993'},
-  {id: 'b6', name: 'Midwest Freight', mc: 'MC-892341', credit: 78, days: 45, phone: '(312) 555-0187'},
-  {id: 'b7', name: 'Quick Load', mc: 'MC-987234', credit: 55, days: 60, phone: '(214) 555-0789'},
-];
-
-const commodities = ['General Freight', 'Palletized Goods', 'Electronics', 'Beverages', 'Auto Parts', 'Building Materials', 'Fresh Produce', 'Frozen Food'];
-const equipTypes = ['DV', 'RF', 'FB', 'SD'];
-
-let loads = [];
-let bookings = [];
-let selectedLoad = null;
-let truckProfile = {
-  name: 'My Truck',
-  mc: 'MC-123456',
-  equipment: 'DV',
-  location: 'Chicago, IL',
-  minRPM: 2.50,
-  maxDH: 150
-};
-
-// Distance calculation
-function calcDistance(c1, c2) {
-  const R = 3959;
-  const dLat = (c2.lat - c1.lat) * Math.PI / 180;
-  const dLon = (c2.lng - c1.lng) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(c1.lat*Math.PI/180) * Math.cos(c2.lat*Math.PI/180) * Math.sin(dLon/2)**2;
-  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 1.15);
-}
-
-function getCurrentCity() {
-  const loc = truckProfile.location;
-  return cities.find(c => `${c.name}, ${c.state}` === loc) || cities[0];
-}
-
-// Generate loads
-function generateLoads() {
-  loads = [];
-  const today = new Date();
-  
-  for (let i = 0; i < 100; i++) {
-    const origin = cities[Math.floor(Math.random() * cities.length)];
-    let dest = cities[Math.floor(Math.random() * cities.length)];
-    while (dest === origin) dest = cities[Math.floor(Math.random() * cities.length)];
-    
-    const miles = calcDistance(origin, dest);
-    if (miles < 150 || miles > 2000) continue;
-    
-    const broker = brokers[Math.floor(Math.random() * Math.random() * brokers.length)];
-    const equip = equipTypes[Math.floor(Math.random() * equipTypes.length)];
-    
-    let baseRPM = 2.2 + Math.random() * 0.8;
-    if (equip === 'RF') baseRPM += 0.3;
-    if (equip === 'FB') baseRPM += 0.25;
-    if (dest.state === 'FL') baseRPM *= 0.85;
-    
-    const rate = Math.round(miles * baseRPM);
-    const rpm = Math.round(baseRPM * 100) / 100;
-    
-    const pickupDays = Math.floor(Math.random() * 3);
-    const pickupDate = new Date(today);
-    pickupDate.setDate(today.getDate() + pickupDays);
-    
-    loads.push({
-      id: `L${1000 + i}`,
-      ref: `REF-${broker.mc.split('-')[1]}-${1000 + i}`,
-      origin: `${origin.name}, ${origin.state}`,
-      originCity: origin,
-      dest: `${dest.name}, ${dest.state}`,
-      destCity: dest,
-      equipment: equip,
-      miles,
-      rate,
-      rpm,
-      broker,
-      commodity: commodities[Math.floor(Math.random() * commodities.length)],
-      weight: Math.round((20000 + Math.random() * 25000) / 1000) * 1000,
-      pallets: Math.floor(Math.random() * 24) + 2,
-      pickupDate: pickupDate.toISOString().split('T')[0],
-      pickupTime: `${6 + Math.floor(Math.random() * 10)}:00`,
-      pickupType: Math.random() > 0.4 ? 'Appointment' : 'FCFS',
-      deliveryType: Math.random() > 0.7 ? 'Drop & Hook' : 'Live Unload',
-      lumper: Math.random() > 0.6,
-      detention: Math.random() > 0.3 ? 50 + Math.floor(Math.random() * 3) * 25 : 0
-    });
-  }
-  
-  loads.sort((a, b) => b.rpm - a.rpm);
-}
-
-function getDeadhead(load) {
-  return calcDistance(getCurrentCity(), load.originCity);
-}
-
-function getEffectiveRPM(load) {
-  const dh = getDeadhead(load);
-  return Math.round((load.rate / (load.miles + dh)) * 100) / 100;
-}
-
-function getCreditClass(credit) {
-  if (credit >= 85) return 'bg-green-500';
-  if (credit >= 65) return 'bg-yellow-500';
-  return 'bg-red-500';
-}
-
-// Render loads
-function renderLoads() {
-  const tbody = document.getElementById('loadsTable');
-  const noLoads = document.getElementById('noLoads');
-  
-  const filtered = getFilteredLoads();
-  document.getElementById('loadCount').textContent = filtered.length;
-  
-  if (filtered.length === 0) {
-    tbody.innerHTML = '';
-    noLoads.classList.remove('hidden');
-    return;
-  }
-  
-  noLoads.classList.add('hidden');
-  tbody.innerHTML = filtered.slice(0, 50).map(load => {
-    const dh = getDeadhead(load);
-    const effRPM = getEffectiveRPM(load);
-    const isBooked = bookings.some(b => b.id === load.id);
-    
-    return `
-      <tr class="load-row border-b ${isBooked ? 'opacity-50' : ''}" onclick="showLoadDetails('${load.id}')">
-        <td class="px-3 py-2"><div class="font-medium">${load.origin.split(',')[0]}</div><div class="text-xs text-gray-500">${load.origin.split(',')[1]}</div></td>
-        <td class="px-3 py-2"><div class="font-medium">${load.dest.split(',')[0]}</div><div class="text-xs text-gray-500">${load.dest.split(',')[1]}</div></td>
-        <td class="px-2 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium equipment-${load.equipment}">${load.equipment}</span></td>
-        <td class="px-2 py-2 text-right font-mono">${load.miles}</td>
-        <td class="px-2 py-2 text-right font-mono text-gray-500">${dh}</td>
-        <td class="px-3 py-2 text-right font-mono font-bold text-green-600">$${load.rate.toLocaleString()}</td>
-        <td class="px-2 py-2 text-right"><div class="font-mono font-bold">$${load.rpm}</div><div class="text-xs text-gray-400">$${effRPM}</div></td>
-        <td class="px-2 py-2 text-center"><div class="w-3 h-3 rounded-full ${getCreditClass(load.broker.credit)} mx-auto" title="${load.broker.credit}"></div></td>
-      </tr>
-    `;
-  }).join('');
-}
-
-function getFilteredLoads() {
-  const origin = document.getElementById('originFilter').value.toLowerCase();
-  const dest = document.getElementById('destFilter').value.toLowerCase();
-  const equip = document.getElementById('equipFilter').value;
-  const minRPM = parseFloat(document.getElementById('minRPM').value) || 0;
-  const maxDH = parseInt(document.getElementById('maxDH').value) || 9999;
-  
-  return loads.filter(load => {
-    if (bookings.some(b => b.id === load.id)) return false;
-    if (origin && !load.origin.toLowerCase().includes(origin)) return false;
-    if (dest && !load.dest.toLowerCase().includes(dest)) return false;
-    if (equip && load.equipment !== equip) return false;
-    if (load.rpm < minRPM) return false;
-    if (getDeadhead(load) > maxDH) return false;
-    return true;
-  });
-}
-
-function filterLoads() {
-  renderLoads();
-}
-
-function clearFilters() {
-  document.getElementById('originFilter').value = '';
-  document.getElementById('destFilter').value = '';
-  document.getElementById('equipFilter').value = '';
-  document.getElementById('minRPM').value = '';
-  document.getElementById('maxDH').value = '';
-  renderLoads();
-}
-
-function toggleFilters() {
-  document.getElementById('filtersContent').classList.toggle('hidden');
-}
-
-// Load details
-function showLoadDetails(id) {
-  const load = loads.find(l => l.id === id);
-  if (!load) return;
-  
-  selectedLoad = load;
-  const dh = getDeadhead(load);
-  const effRPM = getEffectiveRPM(load);
-  const isBooked = bookings.some(b => b.id === load.id);
-  const creditClass = load.broker.credit >= 85 ? 'text-green-600' : load.broker.credit >= 65 ? 'text-yellow-600' : 'text-red-600';
-  
-  let warnings = [];
-  if (effRPM < truckProfile.minRPM) warnings.push(`⚠️ Effective RPM ($${effRPM}) below your min ($${truckProfile.minRPM})`);
-  if (dh > truckProfile.maxDH) warnings.push(`⚠️ Deadhead (${dh} mi) exceeds your max (${truckProfile.maxDH} mi)`);
-  if (load.broker.credit < 65) warnings.push('⚠️ Broker has poor credit rating');
-  
-  document.getElementById('loadDetails').innerHTML = `
-    <div class="text-xs text-gray-500 mb-2">Ref: ${load.ref}</div>
-    
-    <div class="flex items-center justify-between border-b pb-4 mb-4">
-      <div>
-        <div class="text-xs text-gray-500">PICKUP</div>
-        <div class="font-bold text-lg">${load.origin}</div>
-        <div class="text-sm text-gray-600">${load.pickupDate} @ ${load.pickupTime}</div>
-        <div class="text-xs text-gray-500">${load.pickupType}</div>
-      </div>
-      <div class="text-2xl text-gray-400">→</div>
-      <div class="text-right">
-        <div class="text-xs text-gray-500">DELIVERY</div>
-        <div class="font-bold text-lg">${load.dest}</div>
-        <div class="text-sm text-gray-600">${load.deliveryType}</div>
-      </div>
-    </div>
-    
-    <div class="grid grid-cols-3 gap-4 mb-4 text-center">
-      <div class="bg-gray-50 p-3 rounded">
-        <div class="text-xs text-gray-500">Loaded Miles</div>
-        <div class="font-bold text-xl">${load.miles}</div>
-      </div>
-      <div class="bg-gray-50 p-3 rounded">
-        <div class="text-xs text-gray-500">Deadhead</div>
-        <div class="font-bold text-xl text-gray-500">${dh}</div>
-      </div>
-      <div class="bg-green-50 p-3 rounded">
-        <div class="text-xs text-gray-500">Rate</div>
-        <div class="font-bold text-xl text-green-600">$${load.rate.toLocaleString()}</div>
-      </div>
-    </div>
-    
-    <div class="grid grid-cols-2 gap-4 mb-4 text-center">
-      <div class="bg-gray-50 p-2 rounded">
-        <div class="text-xs text-gray-500">Rate/Mile</div>
-        <div class="font-bold">$${load.rpm}/mi</div>
-      </div>
-      <div class="bg-gray-50 p-2 rounded">
-        <div class="text-xs text-gray-500">Effective RPM</div>
-        <div class="font-bold ${effRPM >= truckProfile.minRPM ? 'text-green-600' : 'text-red-600'}">$${effRPM}/mi</div>
-      </div>
-    </div>
-    
-    <div class="border-b pb-4 mb-4">
-      <div class="text-xs text-gray-500 mb-2">LOAD INFO</div>
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        <div><span class="text-gray-500">Equipment:</span> <span class="px-2 py-0.5 rounded text-xs font-medium equipment-${load.equipment}">${load.equipment}</span></div>
-        <div><span class="text-gray-500">Weight:</span> ${load.weight.toLocaleString()} lbs</div>
-        <div><span class="text-gray-500">Pallets:</span> ${load.pallets}</div>
-        <div><span class="text-gray-500">Commodity:</span> ${load.commodity}</div>
-      </div>
-      <div class="flex flex-wrap gap-2 mt-3">
-        ${load.lumper ? '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">✓ Lumper Included</span>' : ''}
-        ${load.detention ? `<span class="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">⏱️ Detention $${load.detention}/hr</span>` : ''}
-      </div>
-    </div>
-    
-    <div class="border-b pb-4 mb-4">
-      <div class="text-xs text-gray-500 mb-2">BROKER</div>
-      <div class="flex justify-between items-center">
-        <div>
-          <div class="font-bold">${load.broker.name}</div>
-          <div class="text-sm text-gray-600">${load.broker.mc}</div>
-          <div class="text-sm text-gray-500">${load.broker.phone}</div>
-        </div>
-        <div class="text-right">
-          <div class="font-bold ${creditClass}">Credit: ${load.broker.credit}</div>
-          <div class="text-sm text-gray-500">Pays in ${load.broker.days} days</div>
-        </div>
-      </div>
-    </div>
-    
-    ${warnings.length > 0 ? `<div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">${warnings.map(w => `<div class="text-sm text-yellow-800">${w}</div>`).join('')}</div>` : ''}
-    
-    ${isBooked ? 
-      '<div class="bg-green-100 text-green-800 py-3 rounded text-center font-bold">✓ Already Booked</div>' :
-      `<button onclick="startBooking('${load.id}')" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded font-bold text-lg">📞 Book This Load</button>`
-    }
-  `;
-  
-  openModal('loadModal');
-}
-
-// Booking flow
-function startBooking(id) {
-  const load = loads.find(l => l.id === id);
-  if (!load) return;
-  
-  closeModal('loadModal');
-  
-  document.getElementById('bookingFlowContent').innerHTML = `
-    <div class="bg-gray-50 p-4 rounded mb-4">
-      <div class="font-bold text-lg">${load.broker.name}</div>
-      <div class="text-gray-600">${load.broker.phone}</div>
-      <div class="text-sm text-gray-500 mt-2">${load.origin} → ${load.dest}</div>
-    </div>
-    
-    <div class="mb-6">
-      <h3 class="font-bold mb-3">📋 Call Checklist</h3>
-      <div class="space-y-2">
-        <label class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-          <input type="checkbox" class="w-5 h-5 rounded">
-          <span>Is this load still available?</span>
-        </label>
-        <label class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-          <input type="checkbox" class="w-5 h-5 rounded">
-          <span>What is the commodity?</span>
-        </label>
-        <label class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-          <input type="checkbox" class="w-5 h-5 rounded">
-          <span>How many pallets/pieces?</span>
-        </label>
-        <label class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-          <input type="checkbox" class="w-5 h-5 rounded">
-          <span>What's the pickup window?</span>
-        </label>
-        <label class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-          <input type="checkbox" class="w-5 h-5 rounded">
-          <span>Live load or preloaded?</span>
-        </label>
-        <label class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-          <input type="checkbox" class="w-5 h-5 rounded">
-          <span>Who pays for lumper?</span>
-        </label>
-        <label class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer">
-          <input type="checkbox" class="w-5 h-5 rounded">
-          <span>What is the rate?</span>
-        </label>
-      </div>
-    </div>
-    
-    <div class="bg-yellow-50 border border-yellow-200 p-4 rounded mb-6">
-      <h4 class="font-bold text-yellow-800 mb-2">Opening Script:</h4>
-      <p class="text-sm italic">"Hi, this is calling from ${truckProfile.name}. I'm calling about load number ${load.ref} from ${load.origin.split(',')[0]} to ${load.dest.split(',')[0]}. Is this load still available?"</p>
-    </div>
-    
-    <div class="bg-green-50 border border-green-200 p-4 rounded mb-6">
-      <h4 class="font-bold text-green-800 mb-2">Negotiated Rate</h4>
-      <div class="flex items-center space-x-4">
-        <span class="text-gray-600">Posted: $${load.rate.toLocaleString()}</span>
-        <input type="number" id="negotiatedRate" value="${load.rate}" class="border rounded px-3 py-2 w-32 font-bold text-lg">
-      </div>
-    </div>
-    
-    <button onclick="confirmBooking('${load.id}')" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded font-bold">Broker Confirmed → Book Load</button>
-  `;
-  
-  openModal('bookingFlowModal');
-}
-
-function confirmBooking(id) {
-  const load = loads.find(l => l.id === id);
-  if (!load) return;
-  
-  const negotiatedRate = parseInt(document.getElementById('negotiatedRate').value) || load.rate;
-  
-  bookings.push({
-    ...load,
-    negotiatedRate,
-    bookedAt: new Date().toISOString()
-  });
-  
-  closeModal('bookingFlowModal');
-  updateBookingCount();
-  renderLoads();
-  
-  alert('✓ Load booked successfully!');
-}
-
-function updateBookingCount() {
-  document.getElementById('bookingCount').textContent = bookings.length;
-}
-
-// Truck profile
-function saveTruckProfile() {
-  truckProfile = {
-    name: document.getElementById('truckName').value,
-    mc: document.getElementById('truckMC').value,
-    equipment: document.getElementById('truckEquip').value,
-    location: document.getElementById('truckLocation').value,
-    minRPM: parseFloat(document.getElementById('truckMinRPM').value) || 2.50,
-    maxDH: parseInt(document.getElementById('truckMaxDH').value) || 150
-  };
-  
-  document.getElementById('currentLocation').textContent = truckProfile.location;
-  closeModal('truckModal');
-  renderLoads();
-}
-
-// Modals
-function openModal(id) {
-  document.getElementById(id).classList.add('active');
-  
-  if (id === 'bookingsModal') renderBookings();
-  if (id === 'statsModal') renderStats();
-}
-
-function closeModal(id) {
-  document.getElementById(id).classList.remove('active');
-}
-
-function renderBookings() {
-  const totalRevenue = bookings.reduce((s, b) => s + (b.negotiatedRate || b.rate), 0);
-  const totalMiles = bookings.reduce((s, b) => s + b.miles, 0);
-  const avgRPM = totalMiles > 0 ? (totalRevenue / totalMiles).toFixed(2) : '0.00';
-  
-  document.getElementById('bookingsSummary').innerHTML = `
-    <div class="bg-blue-50 p-3 rounded text-center">
-      <div class="text-2xl font-bold text-blue-600">${bookings.length}</div>
-      <div class="text-xs text-gray-600">Loads</div>
-    </div>
-    <div class="bg-green-50 p-3 rounded text-center">
-      <div class="text-2xl font-bold text-green-600">$${totalRevenue.toLocaleString()}</div>
-      <div class="text-xs text-gray-600">Revenue</div>
-    </div>
-    <div class="bg-purple-50 p-3 rounded text-center">
-      <div class="text-2xl font-bold text-purple-600">$${avgRPM}</div>
-      <div class="text-xs text-gray-600">Avg $/mi</div>
-    </div>
-  `;
-  
-  if (bookings.length === 0) {
-    document.getElementById('bookingsList').innerHTML = '<div class="text-center text-gray-500 py-8">No bookings yet</div>';
-    return;
-  }
-  
-  document.getElementById('bookingsList').innerHTML = bookings.map(b => `
-    <div class="border-b py-3">
-      <div class="flex justify-between items-start">
-        <div>
-          <div class="font-medium">${b.origin} → ${b.dest}</div>
-          <div class="text-sm text-gray-500">${b.broker.name} • ${b.miles} mi</div>
-        </div>
-        <div class="text-right">
-          <div class="font-bold text-green-600">$${(b.negotiatedRate || b.rate).toLocaleString()}</div>
-          <div class="text-xs text-gray-500">${b.equipment}</div>
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderStats() {
-  const totalLoads = bookings.length;
-  const totalRevenue = bookings.reduce((s, b) => s + (b.negotiatedRate || b.rate), 0);
-  const totalMiles = bookings.reduce((s, b) => s + b.miles, 0);
-  const avgRPM = totalMiles > 0 ? totalRevenue / totalMiles : 0;
-  
-  let score = 0;
-  if (totalLoads >= 5) score += 25;
-  else if (totalLoads >= 3) score += 15;
-  if (avgRPM >= 2.75) score += 35;
-  else if (avgRPM >= 2.50) score += 25;
-  if (totalMiles >= 2500) score += 25;
-  else if (totalMiles >= 1500) score += 15;
-  
-  const badBrokers = bookings.filter(b => b.broker.credit < 65).length;
-  if (badBrokers === 0) score += 15;
-  
-  let grade = 'F', color = 'text-red-600';
-  if (score >= 80) { grade = 'A'; color = 'text-green-600'; }
-  else if (score >= 60) { grade = 'B'; color = 'text-blue-600'; }
-  else if (score >= 40) { grade = 'C'; color = 'text-yellow-600'; }
-  
-  document.getElementById('statsContent').innerHTML = `
-    <div class="text-center mb-6">
-      <div class="text-5xl font-bold ${color}">${grade}</div>
-      <div class="text-gray-600">Score: ${score}/100</div>
-    </div>
-    
-    <div class="grid grid-cols-2 gap-4 mb-4">
-      <div class="bg-blue-50 p-3 rounded text-center">
-        <div class="text-2xl font-bold">${totalLoads}</div>
-        <div class="text-xs text-gray-600">Loads</div>
-      </div>
-      <div class="bg-green-50 p-3 rounded text-center">
-        <div class="text-2xl font-bold">$${totalRevenue.toLocaleString()}</div>
-        <div class="text-xs text-gray-600">Revenue</div>
-      </div>
-      <div class="bg-purple-50 p-3 rounded text-center">
-        <div class="text-2xl font-bold">${totalMiles.toLocaleString()}</div>
-        <div class="text-xs text-gray-600">Miles</div>
-      </div>
-      <div class="bg-orange-50 p-3 rounded text-center">
-        <div class="text-2xl font-bold">$${avgRPM.toFixed(2)}</div>
-        <div class="text-xs text-gray-600">Avg $/mi</div>
-      </div>
-    </div>
-    
-    ${badBrokers > 0 ? `<div class="bg-red-50 border border-red-200 p-3 rounded text-sm text-red-700">⚠️ You booked ${badBrokers} load(s) with poor-credit brokers</div>` : ''}
-  `;
-}
-
-// Init
-generateLoads();
-renderLoads();
+const cities=[{name:'Chicago',state:'IL',lat:41.8781,lng:-87.6298,hub:true},{name:'Dallas',state:'TX',lat:32.7767,lng:-96.7970,hub:true},{name:'Atlanta',state:'GA',lat:33.7490,lng:-84.3880,hub:true},{name:'Los Angeles',state:'CA',lat:34.0522,lng:-118.2437,hub:true},{name:'Denver',state:'CO',lat:39.7392,lng:-104.9903,hub:true},{name:'Houston',state:'TX',lat:29.7604,lng:-95.3698,hub:true},{name:'Phoenix',state:'AZ',lat:33.4484,lng:-112.0740},{name:'Miami',state:'FL',lat:25.7617,lng:-80.1918,hub:true},{name:'Seattle',state:'WA',lat:47.6062,lng:-122.3321},{name:'Detroit',state:'MI',lat:42.3314,lng:-83.0458},{name:'Philadelphia',state:'PA',lat:39.9526,lng:-75.1652},{name:'Nashville',state:'TN',lat:36.1627,lng:-86.7816},{name:'Charlotte',state:'NC',lat:35.2271,lng:-80.8431},{name:'Indianapolis',state:'IN',lat:39.7684,lng:-86.1581,hub:true},{name:'Columbus',state:'OH',lat:39.9612,lng:-82.9988},{name:'Memphis',state:'TN',lat:35.1495,lng:-90.0490,hub:true},{name:'Kansas City',state:'MO',lat:39.0997,lng:-94.5786},{name:'Jacksonville',state:'FL',lat:30.3322,lng:-81.6557},{name:'San Antonio',state:'TX',lat:29.4241,lng:-98.4936},{name:'Portland',state:'OR',lat:45.5152,lng:-122.6784},{name:'Louisville',state:'KY',lat:38.2527,lng:-85.7585},{name:'Milwaukee',state:'WI',lat:43.0389,lng:-87.9065},{name:'Albuquerque',state:'NM',lat:35.0844,lng:-106.6504},{name:'Tucson',state:'AZ',lat:32.2226,lng:-110.9747},{name:'Fresno',state:'CA',lat:36.7378,lng:-119.7871},{name:'Sacramento',state:'CA',lat:38.5816,lng:-121.4944},{name:'Salt Lake City',state:'UT',lat:40.7608,lng:-111.8910},{name:'Oklahoma City',state:'OK',lat:35.4676,lng:-97.5164},{name:'Las Vegas',state:'NV',lat:36.1699,lng:-115.1398},{name:'Minneapolis',state:'MN',lat:44.9778,lng:-93.2650},{name:'New Orleans',state:'LA',lat:29.9511,lng:-90.0715},{name:'Cleveland',state:'OH',lat:41.4993,lng:-81.6944},{name:'Pittsburgh',state:'PA',lat:40.4406,lng:-79.9959},{name:'Cincinnati',state:'OH',lat:39.1031,lng:-84.5120},{name:'St. Louis',state:'MO',lat:38.6270,lng:-90.1994},{name:'Tampa',state:'FL',lat:27.9506,lng:-82.4572},{name:'Orlando',state:'FL',lat:28.5383,lng:-81.3792},{name:'San Diego',state:'CA',lat:32.7157,lng:-117.1611},{name:'Baltimore',state:'MD',lat:39.2904,lng:-76.6122},{name:'Boston',state:'MA',lat:42.3601,lng:-71.0589},{name:'Newark',state:'NJ',lat:40.7357,lng:-74.1724},{name:'El Paso',state:'TX',lat:31.7619,lng:-106.4850},{name:'Laredo',state:'TX',lat:27.5036,lng:-99.5075},{name:'Savannah',state:'GA',lat:32.0809,lng:-81.0912},{name:'Reno',state:'NV',lat:39.5296,lng:-119.8138}];
+const brokers=[{id:'b1',name:'C.H. Robinson Worldwide',mc:'MC-128732',credit:98,days:30,bond:75000,phone:'(800) 323-7587',factoring:true,reviews:4.8,loads:15420},{id:'b2',name:'Total Quality Logistics',mc:'MC-354840',credit:95,days:28,bond:75000,phone:'(800) 580-3101',factoring:true,reviews:4.6,loads:12340},{id:'b3',name:'Coyote Logistics',mc:'MC-551052',credit:96,days:21,bond:75000,phone:'(877) 626-9683',factoring:true,reviews:4.7,loads:9870},{id:'b4',name:'Landstar System',mc:'MC-143034',credit:99,days:14,bond:100000,phone:'(877) 696-4507',factoring:true,reviews:4.9,loads:18200},{id:'b5',name:'Echo Global Logistics',mc:'MC-537809',credit:92,days:35,bond:75000,phone:'(800) 354-7993',factoring:true,reviews:4.4,loads:8540},{id:'b6',name:'XPO Logistics',mc:'MC-882391',credit:97,days:25,bond:75000,phone:'(844) 742-5976',factoring:true,reviews:4.5,loads:11230},{id:'b7',name:'J.B. Hunt Transport',mc:'MC-453235',credit:99,days:21,bond:100000,phone:'(800) 643-3622',factoring:true,reviews:4.8,loads:14560},{id:'b8',name:'Midwest Freight Solutions',mc:'MC-892341',credit:78,days:45,bond:25000,phone:'(312) 555-0187',factoring:false,reviews:3.2,loads:890},{id:'b9',name:'Quick Load Express',mc:'MC-987234',credit:55,days:60,bond:10000,phone:'(214) 555-0789',factoring:false,reviews:2.1,loads:234},{id:'b10',name:'Apex Logistics',mc:'MC-765432',credit:82,days:30,bond:50000,phone:'(404) 555-1234',factoring:true,reviews:3.8,loads:2340},{id:'b11',name:'GlobalTranz',mc:'MC-610568',credit:94,days:28,bond:75000,phone:'(866) 275-1407',factoring:true,reviews:4.5,loads:7650},{id:'b12',name:'Mode Transportation',mc:'MC-672395',credit:91,days:30,bond:75000,phone:'(972) 437-6633',factoring:true,reviews:4.3,loads:5430},{id:'b13',name:'Uber Freight',mc:'MC-979629',credit:93,days:7,bond:75000,phone:'(844) 822-3569',factoring:true,reviews:4.2,loads:6780},{id:'b14',name:'Convoy',mc:'MC-835522',credit:90,days:14,bond:75000,phone:'(855) 880-1800',factoring:true,reviews:4.1,loads:4560},{id:'b15',name:'Sunset Pacific Transportation',mc:'MC-445566',credit:68,days:45,bond:25000,phone:'(323) 555-9876',factoring:false,reviews:2.8,loads:560}];
+const commodities=['General Freight','Palletized Goods','Electronics','Beverages','Auto Parts','Building Materials','Fresh Produce','Frozen Food','Pharmaceuticals','Furniture','Paper Products','Chemicals (Non-Hazmat)','Plastics','Metal Products','Machinery','Textiles','Food & Grocery','Medical Supplies','Consumer Goods','Industrial Equipment'];
+const equipTypes={'DV':{name:'Dry Van',avgRPM:2.35,icon:'📦'},'RF':{name:'Reefer',avgRPM:2.75,icon:'❄️'},'FB':{name:'Flatbed',avgRPM:2.65,icon:'🔩'},'SD':{name:'Step Deck',avgRPM:2.80,icon:'📐'},'PO':{name:'Power Only',avgRPM:2.20,icon:'🚛'},'HS':{name:'Hotshot',avgRPM:2.90,icon:'⚡'},'LTL':{name:'LTL',avgRPM:3.50,icon:'📬'},'OD':{name:'Oversize',avgRPM:3.20,icon:'🏗️'}};
+let allLoads=[],filteredLoads=[],bookings=[],currentPage=1,pageSize=50,currentLocation='Chicago, IL',selectedLoadId=null;
+function calcDistance(c1,c2){const R=3959,dLat=(c2.lat-c1.lat)*Math.PI/180,dLon=(c2.lng-c1.lng)*Math.PI/180,a=Math.sin(dLat/2)**2+Math.cos(c1.lat*Math.PI/180)*Math.cos(c2.lat*Math.PI/180)*Math.sin(dLon/2)**2;return Math.round(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))*1.15);}
+function getCurrentCity(){const[name,state]=currentLocation.split(', ');return cities.find(c=>c.name===name&&c.state===state)||cities[0];}
+function getCreditColor(s){return s>=90?'credit-excellent':s>=80?'credit-good':s>=70?'credit-fair':s>=60?'credit-poor':'credit-bad';}
+function getCreditLabel(s){return s>=90?'Excellent':s>=80?'Good':s>=70?'Fair':s>=60?'Poor':'Bad';}
+function formatAge(m){return m<60?m+'m':m<1440?Math.floor(m/60)+'h':Math.floor(m/1440)+'d';}
+function generateLoads(){allLoads=[];const now=new Date();for(let i=0;i<500;i++){const origin=cities[Math.floor(Math.random()*cities.length)];let dest=cities[Math.floor(Math.random()*cities.length)];while(dest===origin)dest=cities[Math.floor(Math.random()*cities.length)];const miles=calcDistance(origin,dest);if(miles<100||miles>2500){i--;continue;}const brokerIdx=Math.floor(Math.random()*Math.random()*brokers.length),broker=brokers[brokerIdx];const equipKeys=Object.keys(equipTypes),equipWeights=[35,20,15,8,7,5,5,5];let equipIdx=0,rand=Math.random()*100;for(let j=0;j<equipWeights.length;j++){rand-=equipWeights[j];if(rand<=0){equipIdx=j;break;}}const equip=equipKeys[equipIdx],equipInfo=equipTypes[equip];let baseRPM=equipInfo.avgRPM+(Math.random()-0.5)*0.6;if(dest.state==='FL'&&!dest.hub)baseRPM*=0.88;if(origin.state==='CA')baseRPM*=1.05;if(broker.credit<70)baseRPM*=1.08;if(miles>1500)baseRPM*=0.95;if(miles<300)baseRPM*=1.10;baseRPM=Math.max(1.80,Math.min(4.50,baseRPM));const rate=Math.round(miles*baseRPM),rpm=Math.round(baseRPM*100)/100;const pickupDays=Math.floor(Math.random()*5),pickupDate=new Date(now);pickupDate.setDate(now.getDate()+pickupDays);const age=Math.floor(Math.random()*480)+5;const loadType=Math.random()>0.15?'full':'partial',weight=loadType==='full'?Math.round((35000+Math.random()*10000)/1000)*1000:Math.round((5000+Math.random()*20000)/1000)*1000;const team=miles>1200&&Math.random()>0.7,hazmat=Math.random()>0.95,tarp=equip==='FB'&&Math.random()>0.6,twic=['Savannah','Jacksonville','Newark','Los Angeles'].includes(origin.name)&&Math.random()>0.7;allLoads.push({id:'L'+(100000+i),ref:broker.mc.split('-')[1]+'-'+(100000+i),origin:origin.name+', '+origin.state,originCity:origin,dest:dest.name+', '+dest.state,destCity:dest,equipment:equip,miles,rate,rpm,broker,commodity:commodities[Math.floor(Math.random()*commodities.length)],weight,pallets:equip!=='FB'?Math.floor(Math.random()*24)+2:0,length:equip==='FB'||equip==='SD'?Math.floor(Math.random()*20)+30:53,pickupDate:pickupDate.toISOString().split('T')[0],pickupTime:(6+Math.floor(Math.random()*12))+':00',pickupType:Math.random()>0.4?'APPT':'FCFS',deliveryType:Math.random()>0.7?'Drop':'Live',lumper:Math.random()>0.7,detention:Math.random()>0.5?50+Math.floor(Math.random()*3)*25:0,loadType,team,hazmat,tarp,twic,age,posted:new Date(now-age*60000)});}allLoads.sort((a,b)=>a.age-b.age);}
+function getDeadhead(l){return calcDistance(getCurrentCity(),l.originCity);}
+function getEffectiveRPM(l){const dh=getDeadhead(l);return Math.round((l.rate/(l.miles+dh))*100)/100;}
+function filterLoads(){const origin=document.getElementById('originFilter').value.toLowerCase(),dest=document.getElementById('destFilter').value.toLowerCase(),dhOrigin=parseInt(document.getElementById('dhOrigin').value)||9999,equip=document.getElementById('equipFilter').value,loadType=document.getElementById('loadTypeFilter').value,minRPM=parseFloat(document.getElementById('minRPM').value)||0,minRate=parseInt(document.getElementById('minRate').value)||0,minCredit=parseInt(document.getElementById('minCredit').value)||0,maxDays=parseInt(document.getElementById('maxDays').value)||999,teamOnly=document.getElementById('teamFilter').checked,hazmatOnly=document.getElementById('hazmatFilter').checked;filteredLoads=allLoads.filter(l=>{if(bookings.some(b=>b.id===l.id))return false;if(origin&&!l.origin.toLowerCase().includes(origin))return false;if(dest&&!l.dest.toLowerCase().includes(dest))return false;if(getDeadhead(l)>dhOrigin)return false;if(equip&&l.equipment!==equip)return false;if(loadType&&l.loadType!==loadType)return false;if(l.rpm<minRPM)return false;if(l.rate<minRate)return false;if(l.broker.credit<minCredit)return false;if(l.broker.days>maxDays)return false;if(teamOnly&&!l.team)return false;if(hazmatOnly&&!l.hazmat)return false;return true;});currentPage=1;sortLoads();}
+function sortLoads(){const sortBy=document.getElementById('sortBy').value,[field,dir]=sortBy.split('-'),mult=dir==='asc'?1:-1;filteredLoads.sort((a,b)=>{switch(field){case'rpm':return mult*(a.rpm-b.rpm);case'rate':return mult*(a.rate-b.rate);case'miles':return mult*(a.miles-b.miles);case'dh':return mult*(getDeadhead(a)-getDeadhead(b));case'pickup':return mult*(new Date(a.pickupDate)-new Date(b.pickupDate));case'age':return mult*(a.age-b.age);default:return 0;}});renderLoads();}
+function clearAllFilters(){document.getElementById('originFilter').value='';document.getElementById('destFilter').value='';document.getElementById('dhOrigin').value='';document.getElementById('dhDest').value='';document.getElementById('equipFilter').value='';document.getElementById('loadTypeFilter').value='';document.getElementById('minRPM').value='';document.getElementById('minRate').value='';document.getElementById('minCredit').value='0';document.getElementById('maxDays').value='999';document.getElementById('teamFilter').checked=false;document.getElementById('hazmatFilter').checked=false;document.getElementById('pickupDate').value='';filterLoads();}
+function renderLoads(){const tbody=document.getElementById('loadsTable'),noLoads=document.getElementById('noLoads');document.getElementById('loadCount').textContent=filteredLoads.length;document.getElementById('totalLoads').textContent=filteredLoads.length;if(filteredLoads.length===0){tbody.innerHTML='';noLoads.classList.remove('hidden');document.getElementById('pagination').classList.add('hidden');return;}noLoads.classList.add('hidden');document.getElementById('pagination').classList.remove('hidden');const start=(currentPage-1)*pageSize,end=Math.min(start+pageSize,filteredLoads.length),pageLoads=filteredLoads.slice(start,end);document.getElementById('showingStart').textContent=start+1;document.getElementById('showingEnd').textContent=end;document.getElementById('currentPage').textContent=currentPage;document.getElementById('prevBtn').disabled=currentPage===1;document.getElementById('nextBtn').disabled=end>=filteredLoads.length;tbody.innerHTML=pageLoads.map(l=>{const dh=getDeadhead(l),effRPM=getEffectiveRPM(l),isBooked=bookings.some(b=>b.id===l.id),isNew=l.age<30,creditColor=getCreditColor(l.broker.credit);let badges=[];if(l.team)badges.push('<span class="text-xs bg-purple-100 text-purple-700 px-1 rounded">TEAM</span>');if(l.hazmat)badges.push('<span class="text-xs bg-red-100 text-red-700 px-1 rounded">HAZ</span>');if(l.tarp)badges.push('<span class="text-xs bg-yellow-100 text-yellow-700 px-1 rounded">TARP</span>');if(l.twic)badges.push('<span class="text-xs bg-blue-100 text-blue-700 px-1 rounded">TWIC</span>');return`<tr class="load-row border-b ${isBooked?'booked':''} ${isNew?'new-load':''}" onclick="showLoadDetails('${l.id}')"><td class="px-2 py-3 text-center">${isNew?'<span class="inline-block w-2 h-2 bg-green-500 rounded-full" title="New"></span>':''}</td><td class="px-3 py-3 text-xs text-gray-500 mono">${formatAge(l.age)}</td><td class="px-3 py-3"><div class="font-medium text-gray-900">${l.origin.split(',')[0]}</div><div class="text-xs text-gray-500">${l.originCity.state}</div></td><td class="px-3 py-3"><div class="font-medium text-gray-900">${l.dest.split(',')[0]}</div><div class="text-xs text-gray-500">${l.destCity.state}</div></td><td class="px-3 py-3 text-center"><span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold eq-${l.equipment}">${l.equipment}</span></td><td class="px-3 py-3 text-right mono hide-mobile">${l.miles.toLocaleString()}</td><td class="px-3 py-3 text-right mono text-gray-500">${dh}</td><td class="px-3 py-3 text-right"><div class="font-bold text-green-600">$${l.rate.toLocaleString()}</div></td><td class="px-3 py-3 text-right"><div class="font-bold mono">$${l.rpm.toFixed(2)}</div><div class="text-xs text-gray-400 mono">$${effRPM.toFixed(2)}</div></td><td class="px-3 py-3 hide-mobile"><div class="text-sm">${l.pickupDate.split('-').slice(1).join('/')}</div><div class="text-xs text-gray-500">${l.pickupType}</div></td><td class="px-3 py-3"><div class="text-sm font-medium truncate max-w-[120px]" title="${l.broker.name}">${l.broker.name.split(' ')[0]}</div><div class="text-xs text-gray-500">${l.broker.mc}</div></td><td class="px-3 py-3 text-center hide-mobile"><div class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-${creditColor}"></div><span class="text-sm font-medium">${l.broker.credit}</span></div></td><td class="px-3 py-3 hide-mobile"><div class="flex flex-wrap gap-1">${badges.join('')}${l.loadType==='partial'?'<span class="text-xs bg-gray-100 text-gray-600 px-1 rounded">LTL</span>':''}</div></td></tr>`;}).join('');}
+function prevPage(){if(currentPage>1){currentPage--;renderLoads();}}
+function nextPage(){const maxPage=Math.ceil(filteredLoads.length/pageSize);if(currentPage<maxPage){currentPage++;renderLoads();}}
+function showLoadDetails(id){const l=allLoads.find(x=>x.id===id);if(!l)return;selectedLoadId=id;const dh=getDeadhead(l),effRPM=getEffectiveRPM(l),isBooked=bookings.some(b=>b.id===l.id),creditColor=getCreditColor(l.broker.credit),creditLabel=getCreditLabel(l.broker.credit),equipInfo=equipTypes[l.equipment];let warnings=[],tips=[];if(effRPM<2.20)warnings.push('⚠️ Low effective rate per mile');if(dh>150)warnings.push('⚠️ High deadhead miles');if(l.broker.credit<70)warnings.push('⚠️ Broker has poor credit rating');if(l.broker.days>35)warnings.push('⚠️ Slow payment terms');if(l.broker.credit>=90)tips.push('✅ Excellent broker credit score');if(l.broker.days<=21)tips.push('✅ Quick pay available');if(dh<50)tips.push('✅ Low deadhead');if(l.rpm>=2.80)tips.push('✅ Above market rate');document.getElementById('loadRef').textContent='Ref: '+l.ref;document.getElementById('loadDetails').innerHTML=`<div class="flex items-stretch gap-4 mb-6"><div class="flex-1 bg-gray-50 rounded-lg p-4"><div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Pickup</div><div class="text-xl font-bold text-gray-900">${l.origin}</div><div class="text-sm text-gray-600 mt-1">${l.pickupDate} @ ${l.pickupTime}</div><div class="flex items-center gap-2 mt-2"><span class="text-xs px-2 py-1 bg-white rounded border">${l.pickupType}</span>${l.loadType==='partial'?'<span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Partial</span>':''}</div></div><div class="flex items-center text-3xl text-gray-300">→</div><div class="flex-1 bg-gray-50 rounded-lg p-4"><div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Delivery</div><div class="text-xl font-bold text-gray-900">${l.dest}</div><div class="text-sm text-gray-600 mt-1">${l.deliveryType} Unload</div>${l.lumper?'<span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded mt-2 inline-block">Lumper Included</span>':''}</div></div><div class="grid grid-cols-4 gap-3 mb-6"><div class="text-center p-3 bg-gray-50 rounded-lg"><div class="text-xs text-gray-500 uppercase">Miles</div><div class="text-2xl font-bold text-gray-900 mono">${l.miles.toLocaleString()}</div></div><div class="text-center p-3 bg-gray-50 rounded-lg"><div class="text-xs text-gray-500 uppercase">Deadhead</div><div class="text-2xl font-bold text-gray-500 mono">${dh}</div></div><div class="text-center p-3 bg-green-50 rounded-lg"><div class="text-xs text-gray-500 uppercase">Rate</div><div class="text-2xl font-bold text-green-600 mono">$${l.rate.toLocaleString()}</div></div><div class="text-center p-3 bg-blue-50 rounded-lg"><div class="text-xs text-gray-500 uppercase">$/Mile</div><div class="text-xl font-bold text-blue-600 mono">$${l.rpm.toFixed(2)}</div><div class="text-xs text-gray-500">Eff: $${effRPM.toFixed(2)}</div></div></div><div class="border rounded-lg p-4 mb-4"><h3 class="font-bold text-gray-800 mb-3">📦 Load Information</h3><div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm"><div><span class="text-gray-500">Equipment:</span><span class="ml-1 font-medium">${equipInfo.icon} ${equipInfo.name}</span></div><div><span class="text-gray-500">Weight:</span><span class="ml-1 font-medium mono">${l.weight.toLocaleString()} lbs</span></div>${l.pallets>0?`<div><span class="text-gray-500">Pallets:</span><span class="ml-1 font-medium">${l.pallets}</span></div>`:''}<div><span class="text-gray-500">Length:</span><span class="ml-1 font-medium">${l.length} ft</span></div><div class="col-span-2"><span class="text-gray-500">Commodity:</span><span class="ml-1 font-medium">${l.commodity}</span></div></div><div class="flex flex-wrap gap-2 mt-3 pt-3 border-t">${l.team?'<span class="px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm">👥 Team Required</span>':''}${l.hazmat?'<span class="px-2 py-1 bg-red-100 text-red-700 rounded text-sm">☢️ HAZMAT</span>':''}${l.tarp?'<span class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-sm">🎪 Tarp Required</span>':''}${l.twic?'<span class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">🪪 TWIC Card</span>':''}${l.detention>0?`<span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm">⏱️ Detention $${l.detention}/hr</span>`:''}${!l.team&&!l.hazmat&&!l.tarp&&!l.twic&&l.detention===0?'<span class="text-gray-400 text-sm">No special requirements</span>':''}</div></div><div class="border rounded-lg p-4 mb-4"><div class="flex items-start justify-between mb-3"><div><h3 class="font-bold text-gray-800">🏢 ${l.broker.name}</h3><div class="text-sm text-gray-500">${l.broker.mc}</div></div><button onclick="event.stopPropagation();showBrokerDetails('${l.broker.id}')" class="text-sm text-blue-600 hover:text-blue-800 font-medium">View Full Profile →</button></div><div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm"><div><div class="text-gray-500">Credit Score</div><div class="flex items-center gap-2 mt-1"><div class="flex-1 credit-bar"><div class="credit-fill bg-${creditColor}" style="width:${l.broker.credit}%"></div></div><span class="font-bold">${l.broker.credit}</span></div><div class="text-xs text-${creditColor} font-medium">${creditLabel}</div></div><div><div class="text-gray-500">Days to Pay</div><div class="font-bold text-xl">${l.broker.days}</div></div><div><div class="text-gray-500">Bond</div><div class="font-bold">$${l.broker.bond/1000}k</div></div><div><div class="text-gray-500">Factoring</div><div class="font-bold ${l.broker.factoring?'text-green-600':'text-gray-400'}">${l.broker.factoring?'✓ Yes':'✗ No'}</div></div></div><div class="mt-3 pt-3 border-t flex items-center justify-between"><div class="text-sm"><span class="text-gray-500">Phone:</span><a href="tel:${l.broker.phone}" class="ml-1 text-blue-600 font-medium">${l.broker.phone}</a></div><div class="flex items-center gap-1"><span class="text-yellow-500">★</span><span class="font-medium">${l.broker.reviews}</span><span class="text-gray-400 text-sm">(${l.broker.loads.toLocaleString()} loads)</span></div></div></div>${warnings.length>0?`<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">${warnings.map(w=>`<div class="text-sm text-yellow-800">${w}</div>`).join('')}</div>`:''}${tips.length>0?`<div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">${tips.map(t=>`<div class="text-sm text-green-800">${t}</div>`).join('')}</div>`:''}${isBooked?`<div class="bg-green-100 text-green-800 py-4 rounded-lg text-center font-bold text-lg">✅ Load Already Booked</div>`:`<div class="flex gap-3"><button onclick="startBooking('${l.id}')" class="flex-1 py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-lg transition">📞 Book This Load</button><button onclick="closeModal('loadModal')" class="px-6 py-4 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition">Back</button></div>`}`;openModal('loadModal');}
+function showBrokerDetails(bId){const b=brokers.find(x=>x.id===bId);if(!b)return;const creditColor=getCreditColor(b.credit),creditLabel=getCreditLabel(b.credit);document.getElementById('brokerDetails').innerHTML=`<div class="text-center mb-6"><div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3"><span class="text-3xl">🏢</span></div><h2 class="text-xl font-bold text-gray-900">${b.name}</h2><div class="text-gray-500">${b.mc}</div></div><div class="grid grid-cols-2 gap-4 mb-6"><div class="text-center p-4 bg-gray-50 rounded-lg"><div class="text-xs text-gray-500 uppercase">Credit Score</div><div class="text-4xl font-bold text-${creditColor}">${b.credit}</div><div class="text-sm text-${creditColor}">${creditLabel}</div></div><div class="text-center p-4 bg-gray-50 rounded-lg"><div class="text-xs text-gray-500 uppercase">Rating</div><div class="text-4xl font-bold text-yellow-500">★ ${b.reviews}</div><div class="text-sm text-gray-500">${b.loads.toLocaleString()} loads</div></div></div><div class="space-y-3 mb-6"><div class="flex justify-between py-2 border-b"><span class="text-gray-600">Days to Pay</span><span class="font-medium">${b.days} days</span></div><div class="flex justify-between py-2 border-b"><span class="text-gray-600">Surety Bond</span><span class="font-medium">$${b.bond.toLocaleString()}</span></div><div class="flex justify-between py-2 border-b"><span class="text-gray-600">Factoring</span><span class="font-medium ${b.factoring?'text-green-600':'text-red-600'}">${b.factoring?'Approved':'Not Approved'}</span></div><div class="flex justify-between py-2 border-b"><span class="text-gray-600">Phone</span><a href="tel:${b.phone}" class="font-medium text-blue-600">${b.phone}</a></div></div><div class="flex gap-3"><a href="https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=MC_MX&query_string=${b.mc.split('-')[1]}" target="_blank" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-center transition">🔍 FMCSA Lookup</a><button onclick="closeModal('brokerModal')" class="px-6 py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium">Close</button></div>`;closeModal('loadModal');openModal('brokerModal');}
+function startBooking(id){const l=allLoads.find(x=>x.id===id);if(!l)return;closeModal('loadModal');document.getElementById('bookingContent').innerHTML=`<div class="bg-gray-50 rounded-lg p-4 mb-6"><div class="flex justify-between items-start"><div><div class="font-bold text-lg">${l.origin} → ${l.dest}</div><div class="text-gray-600">${l.miles} miles • ${equipTypes[l.equipment].name}</div></div><div class="text-right"><div class="text-2xl font-bold text-green-600">$${l.rate.toLocaleString()}</div><div class="text-sm text-gray-500">$${l.rpm}/mi</div></div></div></div><div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"><div class="font-bold text-blue-900">${l.broker.name}</div><div class="text-blue-700 text-lg font-mono mt-1">${l.broker.phone}</div><div class="text-sm text-blue-600 mt-1">Ref: ${l.ref}</div></div><div class="mb-6"><h3 class="font-bold text-gray-800 mb-3">📋 Step 1: Call Checklist</h3><p class="text-sm text-gray-600 mb-3">Verify all information before booking:</p><div class="space-y-2 bg-gray-50 rounded-lg p-4"><label class="flex items-center gap-3 cursor-pointer"><input type="checkbox" class="w-5 h-5 text-green-600 rounded booking-check"><span>Is this load still available?</span></label><label class="flex items-center gap-3 cursor-pointer"><input type="checkbox" class="w-5 h-5 text-green-600 rounded booking-check"><span>Confirm pickup date/time: ${l.pickupDate} @ ${l.pickupTime}</span></label><label class="flex items-center gap-3 cursor-pointer"><input type="checkbox" class="w-5 h-5 text-green-600 rounded booking-check"><span>Confirm exact pickup address</span></label><label class="flex items-center gap-3 cursor-pointer"><input type="checkbox" class="w-5 h-5 text-green-600 rounded booking-check"><span>Confirm delivery address and type (${l.deliveryType})</span></label><label class="flex items-center gap-3 cursor-pointer"><input type="checkbox" class="w-5 h-5 text-green-600 rounded booking-check"><span>Confirm commodity: ${l.commodity}</span></label><label class="flex items-center gap-3 cursor-pointer"><input type="checkbox" class="w-5 h-5 text-green-600 rounded booking-check"><span>Confirm weight: ${l.weight.toLocaleString()} lbs</span></label><label class="flex items-center gap-3 cursor-pointer"><input type="checkbox" class="w-5 h-5 text-green-600 rounded booking-check"><span>Who pays for lumper? (${l.lumper?'Broker pays':'Ask!'})</span></label><label class="flex items-center gap-3 cursor-pointer"><input type="checkbox" class="w-5 h-5 text-green-600 rounded booking-check"><span>Detention policy confirmed</span></label></div></div><div class="mb-6"><h3 class="font-bold text-gray-800 mb-3">📞 Step 2: Opening Script</h3><div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4"><p class="text-gray-800 italic">"Hi, this is <strong>[Your Name]</strong> calling from <strong>[Company Name]</strong>, MC number <strong>[Your MC]</strong>. I'm calling about load reference <strong>${l.ref}</strong> from ${l.origin.split(',')[0]} to ${l.dest.split(',')[0]}. Is this load still available?"</p></div></div><div class="mb-6"><h3 class="font-bold text-gray-800 mb-3">💰 Step 3: Rate Negotiation</h3><div class="grid grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-600 mb-1">Posted Rate</label><div class="text-2xl font-bold text-gray-400">$${l.rate.toLocaleString()}</div></div><div><label class="block text-sm font-medium text-gray-600 mb-1">Negotiated Rate</label><input type="number" id="negotiatedRate" value="${l.rate}" class="w-full text-2xl font-bold text-green-600 border-2 border-green-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500"></div></div><div class="mt-3 text-sm text-gray-500">💡 Tip: Try negotiating 5-10% higher. Market rate for this lane is ~$${(l.rpm*1.05).toFixed(2)}/mi</div></div><div class="bg-green-50 border-2 border-green-300 rounded-lg p-4 mb-6"><label class="flex items-center gap-3 cursor-pointer"><input type="checkbox" id="brokerConfirmed" class="w-6 h-6 text-green-600 rounded"><span class="font-bold text-green-800">Broker verbally confirmed the load is BOOKED</span></label></div><button onclick="confirmBooking('${l.id}')" id="confirmBookBtn" class="w-full py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-bold text-lg transition">✅ Generate Rate Confirmation</button><p class="text-center text-sm text-gray-500 mt-3">Rate Confirmation will be generated after booking</p>`;openModal('bookingModal');document.getElementById('brokerConfirmed').addEventListener('change',function(){document.getElementById('confirmBookBtn').disabled=!this.checked;});document.getElementById('confirmBookBtn').disabled=true;}
+function confirmBooking(id){const l=allLoads.find(x=>x.id===id);if(!l)return;const negotiatedRate=parseInt(document.getElementById('negotiatedRate').value)||l.rate;const booking={...l,negotiatedRate,bookedAt:new Date().toISOString(),rateCon:'RC-'+Date.now()};bookings.push(booking);closeModal('bookingModal');updateBookingBadge();filterLoads();showRateConfirmation(booking);}
+function showRateConfirmation(b){document.getElementById('rateConContent').innerHTML=`<div class="text-center mb-6"><div class="text-6xl mb-3">✅</div><h2 class="text-2xl font-bold text-green-700">Load Booked Successfully!</h2><div class="text-gray-500">Rate Con: ${b.rateCon}</div></div><div class="border-2 border-dashed border-gray-300 rounded-lg p-6 mb-6"><h3 class="text-center font-bold text-gray-800 mb-4 text-lg">RATE CONFIRMATION</h3><div class="grid grid-cols-2 gap-4 text-sm mb-4"><div><div class="text-gray-500">Broker</div><div class="font-medium">${b.broker.name}</div><div class="text-gray-500">${b.broker.mc}</div></div><div><div class="text-gray-500">Carrier</div><div class="font-medium">[Your Company Name]</div><div class="text-gray-500">[Your MC Number]</div></div></div><div class="border-t border-b py-4 mb-4"><div class="flex justify-between items-center mb-3"><div><div class="font-bold">${b.origin}</div><div class="text-sm text-gray-500">${b.pickupDate} @ ${b.pickupTime}</div></div><div class="text-2xl">→</div><div class="text-right"><div class="font-bold">${b.dest}</div><div class="text-sm text-gray-500">${b.deliveryType} Unload</div></div></div><div class="grid grid-cols-3 gap-4 text-center"><div><div class="text-gray-500 text-xs">Miles</div><div class="font-bold">${b.miles}</div></div><div><div class="text-gray-500 text-xs">Weight</div><div class="font-bold">${b.weight.toLocaleString()} lbs</div></div><div><div class="text-gray-500 text-xs">Equipment</div><div class="font-bold">${equipTypes[b.equipment].name}</div></div></div></div><div class="text-center"><div class="text-gray-500 text-sm">AGREED RATE</div><div class="text-4xl font-bold text-green-600">$${b.negotiatedRate.toLocaleString()}</div><div class="text-gray-500">($${(b.negotiatedRate/b.miles).toFixed(2)}/mile)</div></div></div><div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6"><h4 class="font-bold text-yellow-800 mb-2">📝 Next Steps:</h4><ol class="text-sm text-yellow-900 space-y-1 list-decimal list-inside"><li>Wait for official Rate Confirmation from broker</li><li>Review all details before signing</li><li>Send signed Rate Con back to broker</li><li>Arrive at pickup on time</li><li>Get BOL signed at pickup</li><li>Complete delivery and get POD signed</li><li>Submit invoice with all documents</li></ol></div><button onclick="closeModal('rateConModal')" class="w-full py-3 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition">Close</button>`;openModal('rateConModal');}
+function renderBookings(){if(bookings.length===0){document.getElementById('bookingsContent').innerHTML=`<div class="text-center py-12"><div class="text-4xl mb-3">📋</div><div class="font-medium text-gray-700">No loads booked yet</div><div class="text-sm text-gray-500 mt-1">Start searching and booking loads!</div></div>`;return;}const totalRevenue=bookings.reduce((s,b)=>s+b.negotiatedRate,0),totalMiles=bookings.reduce((s,b)=>s+b.miles,0),avgRPM=totalMiles>0?(totalRevenue/totalMiles).toFixed(2):'0.00';document.getElementById('bookingsContent').innerHTML=`<div class="grid grid-cols-3 gap-4 mb-6"><div class="text-center p-4 bg-blue-50 rounded-lg"><div class="text-3xl font-bold text-blue-600">${bookings.length}</div><div class="text-sm text-gray-600">Loads</div></div><div class="text-center p-4 bg-green-50 rounded-lg"><div class="text-3xl font-bold text-green-600">$${totalRevenue.toLocaleString()}</div><div class="text-sm text-gray-600">Revenue</div></div><div class="text-center p-4 bg-purple-50 rounded-lg"><div class="text-3xl font-bold text-purple-600">$${avgRPM}</div><div class="text-sm text-gray-600">Avg $/mi</div></div></div><div class="space-y-3">${bookings.map(b=>`<div class="border rounded-lg p-4 hover:bg-gray-50 transition"><div class="flex justify-between items-start"><div><div class="font-bold">${b.origin} → ${b.dest}</div><div class="text-sm text-gray-500">${b.broker.name} • ${b.miles} mi • ${equipTypes[b.equipment].name}</div><div class="text-xs text-gray-400 mt-1">Booked: ${new Date(b.bookedAt).toLocaleDateString()}</div></div><div class="text-right"><div class="text-xl font-bold text-green-600">$${b.negotiatedRate.toLocaleString()}</div><div class="text-sm text-gray-500">$${(b.negotiatedRate/b.miles).toFixed(2)}/mi</div></div></div></div>`).join('')}</div>`;}
+function updateBookingBadge(){const badge=document.getElementById('bookingBadge');if(bookings.length>0){badge.textContent=bookings.length;badge.classList.remove('hidden');}else{badge.classList.add('hidden');}}
+function renderStats(){const totalLoads=bookings.length,totalRevenue=bookings.reduce((s,b)=>s+b.negotiatedRate,0),totalMiles=bookings.reduce((s,b)=>s+b.miles,0),avgRPM=totalMiles>0?totalRevenue/totalMiles:0;let score=0;if(totalLoads>=5)score+=25;else if(totalLoads>=3)score+=15;else if(totalLoads>=1)score+=5;if(avgRPM>=2.75)score+=35;else if(avgRPM>=2.50)score+=25;else if(avgRPM>=2.25)score+=15;if(totalMiles>=3000)score+=25;else if(totalMiles>=2000)score+=20;else if(totalMiles>=1000)score+=10;const badBrokers=bookings.filter(b=>b.broker.credit<70).length;if(badBrokers===0&&totalLoads>0)score+=15;else if(badBrokers<=1&&totalLoads>2)score+=10;let grade='F',gradeColor='text-red-600';if(score>=90){grade='A+';gradeColor='text-green-600';}else if(score>=80){grade='A';gradeColor='text-green-600';}else if(score>=70){grade='B';gradeColor='text-blue-600';}else if(score>=60){grade='C';gradeColor='text-yellow-600';}else if(score>=50){grade='D';gradeColor='text-orange-600';}document.getElementById('statsContent').innerHTML=`<div class="text-center mb-6"><div class="text-6xl font-bold ${gradeColor}">${grade}</div><div class="text-gray-600">Performance Score: ${score}/100</div></div><div class="grid grid-cols-2 gap-4 mb-6"><div class="text-center p-4 bg-blue-50 rounded-lg"><div class="text-3xl font-bold text-blue-600">${totalLoads}</div><div class="text-sm text-gray-600">Loads Booked</div></div><div class="text-center p-4 bg-green-50 rounded-lg"><div class="text-3xl font-bold text-green-600">$${totalRevenue.toLocaleString()}</div><div class="text-sm text-gray-600">Total Revenue</div></div><div class="text-center p-4 bg-purple-50 rounded-lg"><div class="text-3xl font-bold text-purple-600">${totalMiles.toLocaleString()}</div><div class="text-sm text-gray-600">Total Miles</div></div><div class="text-center p-4 bg-orange-50 rounded-lg"><div class="text-3xl font-bold text-orange-600">$${avgRPM.toFixed(2)}</div><div class="text-sm text-gray-600">Avg Rate/Mile</div></div></div>${badBrokers>0?`<div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4"><div class="text-sm text-red-700">⚠️ You booked ${badBrokers} load(s) with poor-credit brokers (credit < 70)</div></div>`:totalLoads>0?`<div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4"><div class="text-sm text-green-700">✅ All brokers have good credit ratings!</div></div>`:''}<div class="border-t pt-4"><h4 class="font-bold text-gray-800 mb-3">📊 Scoring Breakdown</h4><div class="space-y-2 text-sm"><div class="flex justify-between"><span class="text-gray-600">Loads Booked</span><span class="font-medium">${totalLoads>=5?'25':totalLoads>=3?'15':totalLoads>=1?'5':'0'}/25</span></div><div class="flex justify-between"><span class="text-gray-600">Average Rate/Mile</span><span class="font-medium">${avgRPM>=2.75?'35':avgRPM>=2.50?'25':avgRPM>=2.25?'15':'0'}/35</span></div><div class="flex justify-between"><span class="text-gray-600">Total Miles</span><span class="font-medium">${totalMiles>=3000?'25':totalMiles>=2000?'20':totalMiles>=1000?'10':'0'}/25</span></div><div class="flex justify-between"><span class="text-gray-600">Broker Quality</span><span class="font-medium">${badBrokers===0&&totalLoads>0?'15':badBrokers<=1&&totalLoads>2?'10':'0'}/15</span></div></div></div>`;}
+function setView(view){document.getElementById('searchPanel').classList.add('hidden');document.getElementById('marketPanel').classList.add('hidden');document.getElementById('postTruckPanel').classList.add('hidden');document.querySelectorAll('[id^="nav-"]').forEach(btn=>{btn.classList.remove('bg-white/10');btn.classList.add('hover:bg-white/10');});if(view==='search'){document.getElementById('searchPanel').classList.remove('hidden');document.getElementById('nav-search').classList.add('bg-white/10');}else if(view==='market'){document.getElementById('marketPanel').classList.remove('hidden');document.getElementById('nav-market').classList.add('bg-white/10');}else if(view==='postTruck'){document.getElementById('postTruckPanel').classList.remove('hidden');document.getElementById('nav-postTruck').classList.add('bg-white/10');}}
+function openModal(id){document.getElementById(id).classList.add('active');document.body.style.overflow='hidden';if(id==='bookingsModal')renderBookings();if(id==='statsModal')renderStats();}
+function closeModal(id){document.getElementById(id).classList.remove('active');document.body.style.overflow='';}
+function updateCurrentLocation(){currentLocation=document.getElementById('currentLocationNav').value;document.getElementById('currentLocationLabel').textContent=currentLocation;filterLoads();}
+function refreshLoads(){generateLoads();filterLoads();}
+function saveSearch(){alert('Search saved! (In real app, this would save to your account)');}
+function postTruck(){alert('Truck posted successfully! (Training mode - no actual posting)');}
+document.addEventListener('DOMContentLoaded',function(){generateLoads();filterLoads();const today=new Date().toISOString().split('T')[0];document.getElementById('pickupDate').value=today;document.getElementById('truckDate').value=today;document.querySelectorAll('.modal-overlay').forEach(modal=>{modal.addEventListener('click',function(e){if(e.target===this){this.classList.remove('active');document.body.style.overflow='';}});});document.addEventListener('keydown',function(e){if(e.key==='Escape'){document.querySelectorAll('.modal-overlay.active').forEach(m=>{m.classList.remove('active');});document.body.style.overflow='';}});});
 </script>
 </body>
 </html>
